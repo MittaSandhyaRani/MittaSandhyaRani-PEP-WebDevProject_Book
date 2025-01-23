@@ -1,4 +1,17 @@
 // add variable references and event listeners here!
+// References to DOM elements
+const searchForm = document.getElementById('search-form');
+const searchInput = document.getElementById('search-input');
+const searchType = document.getElementById('search-type');
+const bookList = document.getElementById('book-list');
+const selectedBook = document.getElementById('selected-book');
+const ebookFilter = document.getElementById('ebook-filter');
+const sortRatingButton = document.getElementById('sort-rating');
+
+// Event Listeners
+searchForm.addEventListener('submit', handleSearch);
+ebookFilter.addEventListener('change', handleFilter);
+sortRatingButton.addEventListener('click', handleSort);
 
 /**
  * Searches for books using the Google Books API based on the given query and type.
@@ -27,6 +40,27 @@
  * 
  */
 async function searchBooks(query, type) {
+    try {
+        const fieldMap = { title: 'title', isbn: 'isbn', author: 'author' };
+        const field = fieldMap[type];
+        const url = `https://openlibrary.org/search.json?${field}=${encodeURIComponent(query)}&fields=title,author_name,ebook_access,first_publish_year,ratings_sortable,isbn,cover_i&limit=10`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+
+        return data.docs.map(book => ({
+            title: book.title || 'Unknown Title',
+            author_name: book.author_name ? book.author_name.join(', ') : 'Unknown Author',
+            isbn: book.isbn ? book.isbn[0] : 'N/A',
+            cover_i: book.cover_i || null,
+            ebook_access: book.ebook_access || 'Unknown',
+            first_publish_year: book.first_publish_year || 'Unknown',
+            ratings_sortable: book.ratings_sortable || 0
+        }));
+    } catch (error) {
+        console.error('Error fetching books:', error);
+        return [];
+    }
 }
 
 /**
@@ -53,8 +87,26 @@ async function searchBooks(query, type) {
 * 5. Ensures that the 'selected-book' element is not visible.
 */
 function displayBookList(books) {
-  
+    bookList.innerHTML = ''; // Clear previous results
+    books.forEach(book => {
+        const list_Item = document.createElement('li');
+        list_Item.classList.add('book-item');
+        list_Item.innerHTML=`
+            <h3 class="title-element">${book.title}</h3>
+            <p class="author-element">Author: ${book.author_name}</p>
+            <img class="cover-element" src="https://covers.openlibrary.org/b/isbn/${book.isbn}-M.jpg" alt="${book.title} Cover">
+            <p class="rating-element">Rating: ${book.ratings_sortable}</p>
+            <p class="ebook-element">Ebook: ${book.ebook_access}</p>
+        `;
+
+        list_Item.addEventListener('click', () => displaySingleBook(book));
+        bookList.appendChild(list_Item);
+    });
+
+    selectedBook.style.display = 'none'; // Hide detailed view
+    bookList.style.display = 'block'; // Show book list
 }
+
 
 /**
  * Handles the search form submission and updates the UI with search results.
@@ -75,7 +127,16 @@ function displayBookList(books) {
  * 7. Handles any errors that may occur during the search process.
  */
 async function handleSearch(event) {
+    event.preventDefault(); // Prevent form submission
+    const query = searchInput.value.trim();
+    const type = searchType.value;
 
+    if (!query) {
+        alert('Please enter a search term.');
+        return;
+    }
+    const books = await searchBooks(query, type);
+    displayBookList(books);
 }
 
 
@@ -105,9 +166,24 @@ async function handleSearch(event) {
  * 
  */
 function displaySingleBook(book) {
+    selectedBook.innerHTML = `
+    <div class="book-detail">
+        <img class="cover-element" src="https://covers.openlibrary.org/b/isbn/${book.isbn}-L.jpg" alt="${book.title} Cover">
+        <div>
+            <h2>${book.title}</h2>
+            <p><strong>Author:</strong> ${book.author_name}</p>
+            <p><strong>First Published:</strong> ${book.first_publish_year}</p>
+            <p><strong>ISBN:</strong> ${book.isbn}</p>
+            <p><strong>Ebook Access:</strong> ${book.ebook_access}</p>
+            <p><strong>Rating:</strong> ${book.ratings_sortable}</p>
+        </div>
+    </div>
+`;
 
+
+    bookList.style.display = 'none'; // Hide book list
+    selectedBook.style.display = 'block'; // Show detailed view
 }
-
 /**
  * Filters the displayed book list to show only e-books when the checkbox is checked.
  * 
@@ -124,7 +200,12 @@ function displaySingleBook(book) {
  * 
  */
 function handleFilter() {
+    const showEbooksOnly = ebookFilter.checked;
+    const filtered_Books = currentBooks.filter(book => 
+        showEbooksOnly ? book.ebook_access === 'borrowable' : true
+    );
 
+    displayBookList(filtered_Books);
 }
 
 /**
@@ -142,5 +223,8 @@ function handleFilter() {
  * 
  */
 function handleSort() {
-
+    const sort_Books = [...currentBooks].sort((a, b) => 
+        (b.ratings_sortable || 0) - (a.ratings_sortable || 0)
+    );
+    displayBookList(sort_Books);
 }
